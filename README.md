@@ -5,6 +5,28 @@
 这是一个前后端分离的管理平台：前端 Vue 3 + Vite + TypeScript，后端 FastAPI（Python）。
 两边各自独立启动，前端 dev server 已关掉自动打开页面，启动后按终端打印的地址手工打开。
 
+## 运行参数（只维护一份）
+
+端口、代理目标、跨域白名单、页大小上限统一维护在仓库根目录的 **`.env`**（已入库），
+后端 `run.sh`/uvicorn、前端 vite 代理、docker-compose 都从这一份读：
+
+| 键 | 含义 | 默认值 |
+| --- | --- | --- |
+| `APP_PORT` | 后端监听端口，前端代理目标默认跟随它 | `8000` |
+| `APP_ALLOWED_ORIGINS` | 跨域白名单（逗号分隔） | `http://127.0.0.1:5173,http://localhost:5173` |
+| `APP_PAGE_SIZE_MAX` | 列表页大小上限 | `200` |
+| `APP_PAGE_SIZE_DEFAULT` | 列表默认页大小 | `20` |
+| `VITE_PROXY_TARGET` | 前端代理目标（不填时按 `APP_PORT` 推导） | 注释掉 |
+
+- 覆盖优先级：`.env` < `.env.local`（本机临时覆盖，不入库）< 进程环境变量；
+  老的 `APP_ENV`、`VITE_PROXY_TARGET`、`VITE_API_BASE` 环境变量和原有启动命令都继续能用。
+- 改完 `.env` 保存后，运行中的服务自动按新值重载：后端的跨域白名单、页大小上限
+  热生效；端口变更由后端按约定退出码退出、`run.sh` 自动按新端口重新拉起；前端
+  dev server 检测到 `.env` 变化会自动重启。重载只追加新日志，历史日志保留当时的值。
+- 也可以通过接口查看/修改：`GET /api/runtime/config` 返回当前生效值和版本号，
+  `PUT /api/runtime/config` 带 `values` 与 `base_version` 落盘。两处同时改时
+  以先落盘的为准，后到的一次返回 409，需重新读取后再改。
+
 ## 目录结构
 
 ```text
@@ -32,7 +54,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 ./run.sh
 ```
 
-健康检查：`curl http://127.0.0.1:8000/api/health`
+健康检查：`curl http://127.0.0.1:8000/api/health`（端口以 `.env` 的 `APP_PORT` 为准）
 
 ### 前端
 
@@ -43,7 +65,8 @@ npm run dev
 ```
 
 前端默认监听 `http://127.0.0.1:5173/`，dev server 不会自动打开浏览器，
-需要自己访问。`/api` 由 vite 代理到后端 `http://127.0.0.1:8000`。
+需要自己访问。`/api` 由 vite 代理到后端，目标地址跟随 `.env` 的 `APP_PORT`
+（默认 `http://127.0.0.1:8000`）。
 
 ## 业务模块
 
