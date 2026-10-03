@@ -85,3 +85,5 @@ desktop.ini
 *.db
 *.pid
 *.seed
+runtime.json.lock
+runtime.json.tmp

@@ -1,22 +1,29 @@
-"""运行配置：端口、跨域、运行环境。"""
+"""运行配置：端口、跨域白名单、页大小上限等运行参数。
+
+唯一需要维护的一份在仓库根的 runtime.json；本模块把它整理成 Settings 暴露。
+`settings` 是实时视图：属性在访问时读取当前生效值，runtime.json 变更后
+不需要重启进程即可生效（监听端口由 app.serve 侦测变更并自动重启监听）。
+
+老的环境变量（APP_ENV、APP_PORT、APP_CORS_ORIGINS、APP_PAGE_SIZE_MAX 等）
+仍然生效，优先级高于 runtime.json。
+"""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from typing import Any
+
+from app.runtime import Settings, runtime_store
+
+__all__ = ["Settings", "settings", "runtime_store"]
 
 
-@dataclass(frozen=True)
-class Settings:
-    app_name: str = "通信基站运维管理平台"
-    env: str = "local"
-    port: int = 8000
-    allowed_origins: list[str] = field(
-        default_factory=lambda: [
-            "http://127.0.0.1:5173",
-            "http://localhost:5173",
-        ]
-    )
-    page_size_default: int = 20
-    page_size_max: int = 200
+class _LiveSettings:
+    """Settings 的实时代理：每次访问属性都取当前生效值。"""
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(runtime_store.get(), name)
+
+    def __repr__(self) -> str:
+        return repr(runtime_store.get())
 
 
-settings = Settings()
+settings = _LiveSettings()

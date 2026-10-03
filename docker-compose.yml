@@ -1,13 +1,27 @@
 services:
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
-      - "8000:8000"
+      - "${APP_PORT:-8000}:${APP_PORT:-8000}"
     environment:
       - APP_ENV=local
+      # 容器内要监听 0.0.0.0；端口经 APP_PORT 覆盖通道与 ports 映射保持一致
+      - APP_HOST=0.0.0.0
+      - APP_PORT=${APP_PORT:-8000}
+    volumes:
+      # 唯一的一份运行参数，宿主机改动 / 接口写入两边都看得到
+      - ./runtime.json:/srv/app/runtime.json
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     ports:
-      - "5173:5173"
+      - "${APP_FRONTEND_PORT:-5173}:5173"
+    environment:
+      - VITE_PROXY_TARGET=http://backend:${APP_PORT:-8000}
+    volumes:
+      - ./runtime.json:/srv/runtime.json
     depends_on:
       - backend

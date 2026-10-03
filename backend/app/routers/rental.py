@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.runtime import check_page_size
 from app.schemas import ActionResult, EntryPayload, PageResult
 from app.services.rental import RentalService
 
@@ -24,8 +25,7 @@ def list_entries(
     size: int = 20,
 ) -> PageResult[dict]:
     """按合同编号与状态过滤场租合同列表；没有数据时返回空页，不报错。"""
-    if size > 200:
-        raise HTTPException(status_code=400, detail="每页最多 200 条，请缩小分页范围")
+    check_page_size(size)
     items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
     return PageResult(items=items, total=total, page=page, size=size)
 

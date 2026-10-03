@@ -17,7 +17,9 @@
 ├── backend/                  FastAPI（Python） 后端
 │   ├── app/routers/          每个业务模块一组接口
 │   ├── app/services/         业务规则与状态流转
+│   ├── app/runtime.py        共享运行参数的读取、热重载与落盘
 │   └── app/store.py          内存数据仓库与示例数据
+├── runtime.json              运行参数唯一来源（端口/代理/跨域/页大小）
 ├── .gitignore
 └── docker-compose.yml
 ```
@@ -32,7 +34,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 ./run.sh
 ```
 
-健康检查：`curl http://127.0.0.1:8000/api/health`
+健康检查：`curl http://127.0.0.1:8000/api/health`（端口以 `runtime.json` 为准，默认 8000）
 
 ### 前端
 
@@ -43,7 +45,44 @@ npm run dev
 ```
 
 前端默认监听 `http://127.0.0.1:5173/`，dev server 不会自动打开浏览器，
-需要自己访问。`/api` 由 vite 代理到后端 `http://127.0.0.1:8000`。
+需要自己访问。`/api` 由 vite 代理到后端，代理目标同样取自 `runtime.json`。
+
+## 运行参数（只维护一份）
+
+端口、代理目标、跨域白名单、页大小上限的唯一来源是仓库根的
+[`runtime.json`](runtime.json)，后端和前端读的都是这一份：
+
+```json
+{
+  "backend": { "host": "127.0.0.1", "port": 8000 },
+  "frontend": { "host": "127.0.0.1", "port": 5173 },
+  "cors_origins": ["http://127.0.0.1:5173", "http://localhost:5173"],
+  "page_size_max": 200,
+  "page_size_default": 20
+}
+```
+
+- **改完两边同时生效**：后端在请求路径上感知文件变更（跨域白名单、页大小
+  上限立即按新值执行；`./run.sh` 启动时换端口会自动重启监听），前端 dev
+  server 侦测到 `runtime.json` 变更会自动重启并换上新端口/代理目标。
+  每次生效都会追加一条带时间戳的日志，历史日志保留当时的值。
+- **代理目标派生**：不配置 `proxy_target` 时自动取
+  `http://{backend.host}:{backend.port}`，换端口后各入口读到的一致；
+  需要钉死时可在 `runtime.json` 里显式写 `proxy_target`。
+- **读写接口**：`GET /api/runtime` 返回当前生效值和版本号；
+  `PUT /api/runtime` 携带 `base_version` 改写并原子落盘。两处同时改写时
+  以先落盘的那份为准，后到的收到 409，重新读取版本后再改即可。
+  被环境变量覆盖的键不允许写入（会返回 400 说明原因）。
+- **老的环境变量继续能用**，优先级高于 `runtime.json`：`APP_ENV`、
+  `APP_HOST`、`APP_PORT`、`APP_FRONTEND_PORT`、`APP_CORS_ORIGINS`、
+  `APP_PAGE_SIZE_MAX`、`APP_PAGE_SIZE_DEFAULT`、`APP_PROXY_TARGET`、
+  `VITE_PROXY_TARGET`（见 `.env.example`）。
+- **老的启动命令继续能用**：`./run.sh`、`make backend`、`npm run dev`，以及
+  显式指定地址的 `uvicorn app.main:app --host 127.0.0.1 --port 8000`
+  （显式参数为静态值，不跟随 `runtime.json`）。
+- **docker compose**：宿主机改 `runtime.json` 容器内立即可见；compose 场景下
+  换端口用 `.env` 里的 `APP_PORT`（同时驱动端口映射和容器内监听，
+  与 `runtime.json` 是同一参数的环境变量覆盖通道）。
 
 ## 业务模块
 
@@ -75,4 +114,6 @@ npm run dev
 - 每个模块的前端页面在 `frontend/src/views/<模块>/index.vue`，后端接口在
   `backend/app/routers/<模块>.py`，业务规则在 `backend/app/services/<模块>.py`。
 - 列表接口统一返回 `{ items, total, page, size }`，动作接口统一返回 `{ ok, message }`。
+- 列表的页大小上限统一走 `app.runtime.check_page_size`，上限值只认 `runtime.json`
+  的 `page_size_max`。
 - 状态流转只允许在 `app/services` 里改，路由层不做业务判断。

@@ -1,0 +1,18 @@
+{
+  "app_name": "通信基站运维管理平台",
+  "backend": {
+    "host": "127.0.0.1",
+    "port": 8000
+  },
+  "cors_origins": [
+    "http://127.0.0.1:5173",
+    "http://localhost:5173"
+  ],
+  "env": "local",
+  "frontend": {
+    "host": "127.0.0.1",
+    "port": 5173
+  },
+  "page_size_default": 20,
+  "page_size_max": 200
+}
